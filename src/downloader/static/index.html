@@ -256,6 +256,7 @@ $("start").addEventListener("click", async () => {
     }
     r.done = true;
     updateSummary();
+    await new Promise(ok => setTimeout(ok, 500));  // websites par bojh na pade
   }
   try { await writeReport(); } catch (err) { showError("Report save nahi hui: " + err.message); }
   refreshButtons(false);

@@ -10,24 +10,35 @@ import sys
 import webbrowser
 from pathlib import Path
 
-import requests
+from urllib.parse import urlsplit
+
+from curl_cffi import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from downloader.pdf_table import parse_pdf  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"
-    ),
-    "Accept": "*/*",
-}
 
 app = Flask(__name__, static_folder=None)
 # Sirf PDF mein mile hue links hi download kiye ja sakte hain.
 allowed_urls: set[str] = set()
+
+
+def http_get(url: str):
+    """File ko asli Chrome browser ki tarah maangta hai.
+
+    Kai websites (jaise Lincoln Electric, loc.gov) aam Python requests ko
+    HTTP 403 de deti hain, is liye Chrome jaisa connection istemaal hota hai.
+    """
+    parts = urlsplit(url)
+    return requests.get(
+        url,
+        impersonate="chrome",
+        headers={"Referer": f"{parts.scheme}://{parts.netloc}/"},
+        timeout=(15, 120),
+        allow_redirects=True,
+    )
 
 
 @app.get("/")
@@ -56,8 +67,8 @@ def fetch():
     if url not in allowed_urls:
         return jsonify(error="Yeh link PDF mein nahi tha"), 403
     try:
-        upstream = requests.get(url, headers=HEADERS, timeout=(15, 120), allow_redirects=True)
-    except requests.RequestException as exc:
+        upstream = http_get(url)
+    except requests.exceptions.RequestException as exc:
         return jsonify(error=f"Connection fail: {exc.__class__.__name__}"), 502
     if upstream.status_code >= 400:
         return jsonify(error=f"Website ne mana kiya (HTTP {upstream.status_code})"), 502

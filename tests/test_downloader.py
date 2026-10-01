@@ -61,12 +61,12 @@ def test_fetch_refuses_urls_not_in_pdf(client):
 def test_fetch_returns_file_and_rejects_html(client, monkeypatch):
     client.post("/api/parse", data={"pdf": (io.BytesIO(make_pdf()), "t.pdf")})
 
-    def fake_get(url, **kwargs):
+    def fake_get(url):
         if url.endswith(".jpg"):
             return FakeResponse(b"JPEGDATA", "image/jpeg", url=url)
         return FakeResponse(b"<html>", "text/html; charset=utf-8", url=url)
 
-    monkeypatch.setattr(app_module.requests, "get", fake_get)
+    monkeypatch.setattr(app_module, "http_get", fake_get)
     ok = client.get("/api/fetch?url=https://example.com/a/135.jpg")
     assert ok.status_code == 200 and ok.data == b"JPEGDATA"
     assert client.get("/api/fetch?url=https://example.com/page").status_code == 422
