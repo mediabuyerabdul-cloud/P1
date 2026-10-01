@@ -1,0 +1,82 @@
+"""Local downloader bot.
+
+Chalane ke liye (project folder se):  python src/downloader/app.py
+Phir browser mein kholein:            http://127.0.0.1:5000
+"""
+
+from __future__ import annotations
+
+import sys
+import webbrowser
+from pathlib import Path
+
+import requests
+from flask import Flask, Response, jsonify, request, send_from_directory
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from downloader.pdf_table import parse_pdf  # noqa: E402
+
+STATIC = Path(__file__).parent / "static"
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+    ),
+    "Accept": "*/*",
+}
+
+app = Flask(__name__, static_folder=None)
+# Sirf PDF mein mile hue links hi download kiye ja sakte hain.
+allowed_urls: set[str] = set()
+
+
+@app.get("/")
+def index():
+    return send_from_directory(STATIC, "index.html")
+
+
+@app.post("/api/parse")
+def parse():
+    upload = request.files.get("pdf")
+    if upload is None:
+        return jsonify(error="PDF file nahi mili"), 400
+    try:
+        rows = parse_pdf(upload.read())
+    except Exception as exc:  # noqa: BLE001 - user ko saaf error dikhana hai
+        return jsonify(error=f"PDF parh nahi saka: {exc}"), 400
+    if not rows:
+        return jsonify(error="Is PDF mein Order/Chapter/Section/Visual/Source URL wala table nahi mila"), 400
+    allowed_urls.update(r.url for r in rows)
+    return jsonify(rows=[r.to_dict() for r in rows])
+
+
+@app.get("/api/fetch")
+def fetch():
+    url = request.args.get("url", "")
+    if url not in allowed_urls:
+        return jsonify(error="Yeh link PDF mein nahi tha"), 403
+    try:
+        upstream = requests.get(url, headers=HEADERS, timeout=(15, 120), allow_redirects=True)
+    except requests.RequestException as exc:
+        return jsonify(error=f"Connection fail: {exc.__class__.__name__}"), 502
+    if upstream.status_code >= 400:
+        return jsonify(error=f"Website ne mana kiya (HTTP {upstream.status_code})"), 502
+    content_type = upstream.headers.get("Content-Type", "application/octet-stream")
+    if "text/html" in content_type:
+        return jsonify(error="Yeh web page hai, file nahi (khud khol kar dekhein)"), 422
+    return Response(
+        upstream.content,
+        content_type=content_type,
+        headers={"X-Final-Url": upstream.url},
+    )
+
+
+def main() -> None:
+    url = "http://127.0.0.1:5000"
+    print(f"\n  Bot chal raha hai: {url}\n  Band karne ke liye is window mein Ctrl+C dabayein.\n")
+    webbrowser.open(url)
+    app.run(host="127.0.0.1", port=5000)
+
+
+if __name__ == "__main__":
+    main()
