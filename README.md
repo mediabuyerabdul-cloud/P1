@@ -23,12 +23,10 @@ Sawal (questions) aur unke options ek hi jagah hain: `src/jev_integration/leads.
 
 ## Claude Code skill
 
-Official TypeSafe skill install karne ke liye apne terminal mein chalayein:
-
-```bash
-claude plugin marketplace add typesafe-ai/skills
-claude plugin install typesafe@typesafe-ai
-```
+Official TypeSafe agent skill `.claude/skills/typesafe-ai/` mein hai
+(source: https://github.com/typesafe-ai/skills, commit `65a39f3`, MIT license).
+Claude Code is repo mein ise khud load kar leta hai. Update karne ke liye upar wale repo se
+`skills/typesafe-ai/` folder dobara copy karein.
 
 ## Status
 
@@ -44,6 +42,7 @@ claude plugin install typesafe@typesafe-ai
 P1/
 ├── README.md    # Project ki maloomat
 ├── .gitignore   # Woh files jo Git save nahi karega
+├── .claude/skills/typesafe-ai/  # Official TypeSafe skill
 ├── src/jev_integration/  # Jev ka code
 ├── src/main.py  # Chalane wali file
 ├── tests/       # Tests
