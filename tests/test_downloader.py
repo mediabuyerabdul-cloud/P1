@@ -70,3 +70,19 @@ def test_fetch_returns_file_and_rejects_html(client, monkeypatch):
     ok = client.get("/api/fetch?url=https://example.com/a/135.jpg")
     assert ok.status_code == 200 and ok.data == b"JPEGDATA"
     assert client.get("/api/fetch?url=https://example.com/page").status_code == 422
+
+
+def test_fetch_falls_back_to_browser_when_blocked(client, monkeypatch):
+    client.post("/api/parse", data={"pdf": (io.BytesIO(make_pdf()), "t.pdf")})
+    url = "https://example.com/a/135.jpg"
+    monkeypatch.setattr(app_module, "http_get", lambda u: FakeResponse(b"", "text/html", 403, u))
+    browser_calls = []
+
+    def fake_browser_get(u):
+        browser_calls.append(u)
+        return app_module.browser_fetch.BrowserResponse(200, b"REALIMG", "image/jpeg", u)
+
+    monkeypatch.setattr(app_module.browser, "get", fake_browser_get)
+    res = client.get("/api/fetch?url=" + url)
+    assert res.status_code == 200 and res.data == b"REALIMG"
+    assert browser_calls == [url]

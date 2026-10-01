@@ -16,6 +16,7 @@ from curl_cffi import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from downloader import browser_fetch  # noqa: E402
 from downloader.pdf_table import parse_pdf  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
@@ -23,6 +24,9 @@ STATIC = Path(__file__).parent / "static"
 app = Flask(__name__, static_folder=None)
 # Sirf PDF mein mile hue links hi download kiye ja sakte hain.
 allowed_urls: set[str] = set()
+browser = browser_fetch.BrowserFetcher()
+# In jawabon par seedhi request ki jagah asli browser se dobara koshish hoti hai.
+BLOCKED_STATUSES = {401, 403, 429}
 
 
 def http_get(url: str):
@@ -61,32 +65,44 @@ def parse():
     return jsonify(rows=[r.to_dict() for r in rows])
 
 
+def download(url: str) -> tuple[int, bytes, str, str]:
+    """Pehle seedhi request; website roke to asli browser se."""
+    try:
+        upstream = http_get(url)
+        if upstream.status_code not in BLOCKED_STATUSES:
+            content_type = upstream.headers.get("Content-Type") or "application/octet-stream"
+            return upstream.status_code, upstream.content, content_type, upstream.url
+    except requests.exceptions.RequestException:
+        pass
+    result = browser.get(url)
+    return result.status_code, result.content, result.content_type, result.url
+
+
 @app.get("/api/fetch")
 def fetch():
     url = request.args.get("url", "")
     if url not in allowed_urls:
         return jsonify(error="Yeh link PDF mein nahi tha"), 403
     try:
-        upstream = http_get(url)
-    except requests.exceptions.RequestException as exc:
-        return jsonify(error=f"Connection fail: {exc.__class__.__name__}"), 502
-    if upstream.status_code >= 400:
-        return jsonify(error=f"Website ne mana kiya (HTTP {upstream.status_code})"), 502
-    content_type = upstream.headers.get("Content-Type", "application/octet-stream")
+        status, content, content_type, final_url = download(url)
+    except Exception as exc:  # noqa: BLE001 - user ko saaf error dikhana hai
+        return jsonify(error=f"Download fail: {exc}"), 502
+    if status >= 400:
+        return jsonify(error=f"Website ne mana kiya (HTTP {status})"), 502
     if "text/html" in content_type:
         return jsonify(error="Yeh web page hai, file nahi (khud khol kar dekhein)"), 422
-    return Response(
-        upstream.content,
-        content_type=content_type,
-        headers={"X-Final-Url": upstream.url},
-    )
+    return Response(content, content_type=content_type, headers={"X-Final-Url": final_url})
 
 
 def main() -> None:
     url = "http://127.0.0.1:5000"
     print(f"\n  Bot chal raha hai: {url}\n  Band karne ke liye is window mein Ctrl+C dabayein.\n")
     webbrowser.open(url)
-    app.run(host="127.0.0.1", port=5000)
+    try:
+        # threaded=False: browser (Playwright) ek hi thread se chalta hai.
+        app.run(host="127.0.0.1", port=5000, threaded=False)
+    finally:
+        browser.close()
 
 
 if __name__ == "__main__":

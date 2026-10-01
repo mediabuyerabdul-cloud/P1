@@ -27,6 +27,8 @@ Band karne ke liye kaali window mein `Ctrl+C` dabayein ya use band kar dein.
 - Jo link file nahi balki **web page** hai (jaise YouTube, Adobe Stock, ya kisi website ka item page),
   us par status "Yeh web page hai, file nahi" aata hai. Woh link aap khud khol kar dekh sakte hain.
 - Sirf PDF mein diye gaye links hi download hote hain, koi aur nahi.
+- Agar koi website bot ko rok de (HTTP 403), to bot aapka **Chrome ya Edge** khud khol kar
+  usi mein link kholta hai aur file save karta hai. Woh browser window bot ki hai, use band na karein.
 
 ## Developers ke liye
 
@@ -39,4 +41,5 @@ pytest                         # tests
 Code:
 - `src/downloader/pdf_table.py`: PDF se rows nikalta hai aur red rows pehchanta hai
 - `src/downloader/app.py`: local server (PDF parse karna, files download karna)
+- `src/downloader/browser_fetch.py`: website roke to asli Chrome/Edge se download
 - `src/downloader/static/index.html`: browser wala page (folder chunna, sequence se save karna)
