@@ -1,4 +1,4 @@
-"""Local downloader bot.
+"""Tool Downloader: local downloader bot.
 
 Chalane ke liye (project folder se):  python src/downloader/app.py
 Phir browser mein kholein:            http://127.0.0.1:5000

@@ -1,4 +1,4 @@
-# PDF Link Downloader
+# Tool Downloader
 
 Ek local bot jo PDF table ke **Source URL** column ke links ek ek kar ke download karta hai:
 
