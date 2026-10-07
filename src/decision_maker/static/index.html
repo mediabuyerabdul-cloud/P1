@@ -58,6 +58,15 @@
   <div class="engine" id="engine">Deciding with: …</div>
 
   <div class="panel">
+    <label>Jev API key — needed for Phases 2–9 (Phase 1 sheet works without it)</label>
+    <div class="row">
+      <div style="flex:1 1 320px"><input id="jevKey" type="password" placeholder="paste your TYPESAFE_API_KEY here…"></div>
+      <div style="flex:0 0 auto"><button onclick="saveKey()">Save &amp; connect</button></div>
+    </div>
+    <div class="hint" id="keyStatus"></div>
+  </div>
+
+  <div class="panel">
     <label>Upload your research sheet (.xlsx or .csv) — you provide the data, Jev decides</label>
     <input type="file" id="sheet" accept=".xlsx,.csv">
     <div class="hint">Needs a header row with <b>Channel Name</b> + stats (subscribers, avg views, monetization, RPM, income, geography/gender/age…). Jev reads the stats and returns Relevance, Competitor Stage, Tier, and the best overall decision.</div>
@@ -176,9 +185,28 @@ async function init() {
 
 function showEngine(engine) {
   $("engine").innerHTML = engine === "jev"
-    ? 'Deciding with: <b>Jev</b> (typesafe.ai)'
-    : 'Deciding with: <b>built-in rules</b> — add your Jev key to .env for Jev-powered decisions';
+    ? 'Deciding with: <b>Jev</b> (typesafe.ai) ✓'
+    : 'Deciding with: <b>built-in rules</b> — paste your Jev key below for Jev-powered decisions';
   $("confHead").style.display = engine === "jev" ? "" : "none";
+  $("keyStatus").innerHTML = engine === "jev"
+    ? '<span style="color:var(--go)">✓ Jev connected.</span>'
+    : 'Not connected. Paste your key (from console.typesafe.ai) and Save.';
+}
+
+async function saveKey() {
+  const key = $("jevKey").value.trim();
+  if (!key) { $("keyStatus").textContent = "Paste your Jev key first."; return; }
+  $("keyStatus").textContent = "Connecting…";
+  try {
+    const res = await fetch("/api/set-key", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || ("HTTP " + res.status));
+    $("jevKey").value = "";
+    showEngine(d.engine);
+  } catch (e) { $("keyStatus").textContent = e.message; }
 }
 
 function setMode(m) {

@@ -6,6 +6,7 @@ Then open:                  http://127.0.0.1:5001
 
 from __future__ import annotations
 
+import os
 import sys
 import webbrowser
 from pathlib import Path
@@ -127,6 +128,36 @@ def export_xlsx():
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=decisions.xlsx"},
     )
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _write_env_key(name: str, value: str) -> None:
+    env = PROJECT_ROOT / ".env"
+    lines = []
+    if env.exists():
+        lines = [ln for ln in env.read_text().splitlines() if not ln.startswith(name + "=")]
+    lines.append(f"{name}={value}")
+    env.write_text("\n".join(lines) + "\n")
+
+
+@app.post("/api/set-key")
+def set_key():
+    global _jev
+    key = (request.get_json(force=True).get("key") or "").strip()
+    if not key:
+        return jsonify(error="Paste your Jev API key first."), 400
+    os.environ["TYPESAFE_API_KEY"] = key
+    try:
+        _write_env_key("TYPESAFE_API_KEY", key)  # persist so it survives restart
+    except Exception:  # noqa: BLE001 - saving is best-effort; the key still works this session
+        pass
+    try:
+        _jev = jev.client_from_env()
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(error=f"Key set but Jev client failed: {exc}"), 500
+    return jsonify(engine="jev" if _jev is not None else "rules", saved=True)
 
 
 @app.get("/api/phases")
