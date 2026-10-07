@@ -58,6 +58,36 @@
   <div class="engine" id="engine">Deciding with: …</div>
 
   <div class="panel">
+    <label>Upload your research sheet (.xlsx or .csv) — you provide the data, Jev decides</label>
+    <input type="file" id="sheet" accept=".xlsx,.csv">
+    <div class="hint">Needs a header row with <b>Channel Name</b> + stats (subscribers, avg views, monetization, RPM, income, geography/gender/age…). Jev reads the stats and returns Relevance, Competitor Stage, Tier, and the best overall decision.</div>
+    <div style="margin-top:12px">
+      <button id="analyze" onclick="analyzeSheet()">Make decision</button>
+      <button class="ghost" id="dlxlsx" onclick="downloadXlsx()" disabled>Download .xlsx</button>
+    </div>
+    <div class="error" id="sheetError"></div>
+  </div>
+
+  <div class="panel" id="recPanel" style="display:none">
+    <div id="recBanner"></div>
+  </div>
+
+  <div class="panel" id="sheetResults" style="display:none">
+    <div class="bar" id="sheetSummary"></div>
+    <div style="overflow:auto">
+      <table>
+        <thead><tr>
+          <th>Relevance</th><th>Channel</th><th>Stage</th><th>Tier</th>
+          <th class="num">Avg views</th><th class="num">Subs</th>
+          <th class="num" id="sConfHead">Conf.</th><th>Why</th>
+        </tr></thead>
+        <tbody id="sheetRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <details class="panel"><summary>Or: quick topic check (no sheet)</summary>
+  <div style="margin-top:14px">
     <div class="modes">
       <button class="ghost active" id="mode-auto" onclick="setMode('auto')">Auto — browse YouTube</button>
       <button class="ghost" id="mode-manual" onclick="setMode('manual')">Manual — type the numbers</button>
@@ -94,6 +124,7 @@
     </div>
     <div class="error" id="error"></div>
   </div>
+  </details>
 
   <div class="panel" id="resultsPanel" style="display:none">
     <div class="bar" id="summary"></div>
@@ -215,6 +246,64 @@ function exportCsv() {
   a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv" }));
   a.download = "decision_maker_results.csv";
   a.click();
+}
+
+let sheetData = null;
+
+async function analyzeSheet() {
+  $("sheetError").textContent = "";
+  const file = $("sheet").files[0];
+  if (!file) { $("sheetError").textContent = "Choose a .xlsx or .csv first."; return; }
+  $("analyze").disabled = true; $("analyze").textContent = "Deciding…";
+  try {
+    const body = new FormData(); body.append("sheet", file);
+    const res = await fetch("/api/analyze-sheet", { method: "POST", body });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    sheetData = data;
+    showEngine(data.engine);
+    renderSheet(data);
+  } catch (e) { $("sheetError").textContent = e.message; }
+  $("analyze").disabled = false; $("analyze").textContent = "Make decision";
+}
+
+function renderSheet(data) {
+  const rows = data.rows, rec = data.recommendation;
+  $("recPanel").style.display = ""; $("sheetResults").style.display = "";
+  const vClass = { Go: "Go", Rework: "Rework", "No-Go": "No-Go" }[rec.verdict] || "";
+  $("recBanner").innerHTML =
+    `<h2 style="margin:0 0 6px">Best decision: <span class="${vClass}">${rec.verdict}</span></h2>` +
+    `<p style="margin:0 0 8px">${esc(rec.reason)}</p>` +
+    (rec.follow && rec.follow.length
+      ? `<p style="margin:0;color:var(--muted)">Follow / model these: <b>${rec.follow.map(esc).join(", ")}</b></p>` : "");
+  const c = { High: 0, Medium: 0, Low: 0 };
+  rows.forEach(r => c[r.relevance]++);
+  $("sheetSummary").innerHTML =
+    `<span>Channels: <b>${rows.length}</b></span><span>High: <b>${c.High}</b></span>` +
+    `<span>Medium: <b>${c.Medium}</b></span><span>Low: <b>${c.Low}</b></span>`;
+  const n = (v) => (v === "" || v == null ? "" : Number(v).toLocaleString());
+  const rc = { High: "Go", Medium: "Rework", Low: "No-Go" };
+  $("sheetRows").innerHTML = rows.map(r => `
+    <tr>
+      <td><span class="pill ${rc[r.relevance]}">${r.relevance}</span></td>
+      <td>${esc(r.channel)}</td><td>${esc(r.stage)}</td><td>${esc(r.tier || "")}</td>
+      <td class="num">${n(r.avg_views)}</td><td class="num">${n(r.subscribers)}</td>
+      <td class="num">${r.confidence != null ? Math.round(r.confidence * 100) + "%" : ""}</td>
+      <td>${esc(r.reason || "")}</td>
+    </tr>`).join("");
+  $("sConfHead").style.display = rows.some(r => r.confidence != null) ? "" : "none";
+  $("dlxlsx").disabled = false;
+}
+
+async function downloadXlsx() {
+  if (!sheetData) return;
+  const res = await fetch("/api/export-xlsx", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows: sheetData.rows, recommendation: sheetData.recommendation }),
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(await res.blob());
+  a.download = "decisions.xlsx"; a.click();
 }
 
 setMode("auto");

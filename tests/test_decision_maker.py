@@ -97,3 +97,38 @@ def test_jev_decide_maps_choice_and_labels():
     assert d.demand == "very strong" and d.saturation == "some"
     assert c.state["avg_views_of_top_results"] == 120000
     assert "Jev: Go" in d.reason
+
+
+# --- Research-sheet flow (reader + channel decisions, no network) ---
+from decision_maker import sheet
+from decision_maker.scoring import classify_channel, recommend_niche
+
+
+def test_read_channels_from_csv_maps_headers_and_numbers():
+    csv_bytes = (
+        "Categories,Channel Name,Subscribes,Avg. Views Per Video,Monetization Status,RPM,Top Gender\n"
+        "Farm,CountyHonor,1 560,26 159,Monetized,2.66,Male75.4%\n"
+        "Farm,Weak One,120,900,Not Monetized,,Male\n"
+    ).encode()
+    recs = sheet.read_channels(csv_bytes, "r.csv")
+    assert [r["channel"] for r in recs] == ["CountyHonor", "Weak One"]
+    assert recs[0]["subscribers"] == 1560 and recs[0]["avg_views"] == 26159
+    assert recs[0]["rpm"] == 2.66 and recs[0]["gender"] == "Male75.4%"
+
+
+def test_classify_channel_and_recommend():
+    leader = classify_channel({"channel": "A", "avg_views": 26000, "subscribers": 1560,
+                               "rpm": 2.66, "monetization": "Monetized"})
+    assert leader["relevance"] == "High" and leader["stage"] == "Market Leader"
+    weak = classify_channel({"channel": "B", "avg_views": 900, "subscribers": 120,
+                             "monetization": "Not Monetized"})
+    assert weak["relevance"] == "Low"
+    rec = recommend_niche([leader, leader, leader, weak])
+    assert rec["verdict"] == "Go" and "A" in rec["follow"]
+
+
+def test_write_xlsx_roundtrips():
+    rows = [classify_channel({"channel": "A", "avg_views": 26000, "subscribers": 1560,
+                              "rpm": 2.66, "monetization": "Monetized"})]
+    data = sheet.write_xlsx(rows, recommend_niche(rows))
+    assert data[:2] == b"PK"  # a valid .xlsx (zip) was produced

@@ -64,3 +64,66 @@ def score_all(ideas, thresholds=None) -> list[Scored]:
     rank = {"Go": 0, "Rework": 1, "No-Go": 2}
     scored.sort(key=lambda s: (rank[s.verdict], -s.opportunity))
     return scored
+
+
+# --- Channel-level decisions over a research sheet (rule fallback) ----------
+
+def _monetized(rec) -> bool:
+    s = str(rec.get("monetization", "")).lower()
+    return "monet" in s and "not" not in s
+
+
+def classify_channel(rec: dict) -> dict:
+    """Rule fallback: judge one channel from the stats you provided."""
+    avg = rec.get("avg_views") or 0
+    subs = rec.get("subscribers") or 0
+    rpm = rec.get("rpm") or 0
+    monthly_views = rec.get("monthly_views") or 0
+    monetized = _monetized(rec)
+
+    if avg >= 25000 or subs >= 5000 or monthly_views >= 500000:
+        stage, tier = "Market Leader", "Market Leader"
+    elif avg >= 10000:
+        stage, tier = "Close competitor", "Rising Challenger"
+    else:
+        stage, tier = "Moderate", "Early / Niche"
+
+    if avg >= 15000 and (monetized or rpm >= 2):
+        relevance = "High"
+    elif avg >= 5000:
+        relevance = "Medium"
+    else:
+        relevance = "Low"
+
+    bits = [f"{int(avg):,} avg views", f"{int(subs):,} subs"]
+    if rpm:
+        bits.append(f"RPM {rpm}")
+    bits.append("monetized" if monetized else "not monetized")
+    return {
+        "channel": rec.get("channel", ""),
+        "relevance": relevance, "stage": stage, "tier": tier,
+        "avg_views": int(avg), "subscribers": int(subs),
+        "monthly_income": rec.get("monthly_income") or "", "rpm": rpm or "",
+        "monetization": rec.get("monetization", ""), "monetized": monetized,
+        "reason": ", ".join(bits) + ".",
+    }
+
+
+def recommend_niche(decisions: list[dict]) -> dict:
+    highs = [d for d in decisions if d["relevance"] == "High"]
+    monetized = [d for d in decisions if d.get("monetized")]
+    leaders = [d for d in decisions if d["stage"] == "Market Leader"]
+    follow = [d["channel"] for d in sorted(highs, key=lambda d: -d["avg_views"])[:4]]
+
+    if len(highs) >= 3 and monetized:
+        verdict = "Go"
+        reason = (f"{len(highs)} highly-relevant channels, {len(monetized)} monetized, "
+                  f"{len(leaders)} market leader(s) — proven, monetizable niche.")
+    elif highs:
+        verdict = "Rework"
+        reason = (f"Some traction ({len(highs)} high-relevance) but thin monetization proof — "
+                  "enter with a sharper angle.")
+    else:
+        verdict = "No-Go"
+        reason = "No highly-relevant, proven channels — weak niche signal."
+    return {"verdict": verdict, "reason": reason, "follow": follow}

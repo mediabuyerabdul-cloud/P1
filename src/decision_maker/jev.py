@@ -83,3 +83,55 @@ def decide(client, topic, niche, competing_videos, avg_views) -> Decision:
     reason = f"Jev: {verdict} ({v.confidence:.0%} confident) — demand {demand}, saturation {saturation}."
     return Decision(topic, niche, int(competing_videos), int(avg_views),
                     verdict, round(float(v.confidence), 3), demand, saturation, reason)
+
+
+# --- Channel decisions via Jev (over a research sheet) ----------------------
+
+RELEVANCE_CHOICES = {
+    "high": "Core archetype worth modelling closely",
+    "medium": "Adjacent — overlapping audience but a different angle",
+    "low": "Weak fit — different market, language, or demographic",
+}
+STAGE_CHOICES = {
+    "market_leader": "Dominant scale and/or revenue in the niche",
+    "close_competitor": "Direct competitor, growing, same format",
+    "moderate": "Early-stage or loosely related",
+}
+STAGE_LABEL = {"market_leader": "Market Leader", "close_competitor": "Close competitor", "moderate": "Moderate"}
+TIER_FOR_STAGE = {"Market Leader": "Market Leader", "Close competitor": "Rising Challenger", "Moderate": "Early / Niche"}
+
+
+def decide_channel(client, rec: dict) -> dict:
+    from typesafe_sdk import Choice
+
+    resp = client.system_one(
+        state={k: rec.get(k, "") for k in (
+            "channel", "category", "subscribers", "avg_views", "monthly_views", "monthly_income",
+            "rpm", "total_views", "total_videos", "uploads_per_month", "video_length",
+            "monetization", "country", "geo", "gender", "age")},
+        questions={
+            "relevance": Choice(
+                instructions="How relevant is this channel as a competitor to model for our faceless agency in this niche?",
+                criteria=RELEVANCE_CHOICES),
+            "stage": Choice(
+                instructions="What competitor stage is this channel at?",
+                criteria=STAGE_CHOICES),
+        },
+    )
+    relevance = resp.choices["relevance"].choice
+    stage = STAGE_LABEL.get(resp.choices["stage"].choice, resp.choices["stage"].choice)
+    return {
+        "channel": rec.get("channel", ""),
+        "relevance": relevance.capitalize(),
+        "stage": stage,
+        "tier": TIER_FOR_STAGE.get(stage, stage),
+        "confidence": round(float(resp.choices["relevance"].confidence), 3),
+        "avg_views": int(rec.get("avg_views") or 0),
+        "subscribers": int(rec.get("subscribers") or 0),
+        "monthly_income": rec.get("monthly_income") or "",
+        "rpm": rec.get("rpm") or "",
+        "monetization": rec.get("monetization", ""),
+        "monetized": "monet" in str(rec.get("monetization", "")).lower()
+                     and "not" not in str(rec.get("monetization", "")).lower(),
+        "reason": f"Jev: {relevance} relevance, {stage} ({resp.choices['relevance'].confidence:.0%} conf).",
+    }

@@ -11,11 +11,16 @@ import webbrowser
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from decision_maker import jev, youtube_scrape  # noqa: E402
-from decision_maker.scoring import DEFAULT_THRESHOLDS, score_all  # noqa: E402
+from decision_maker import jev, sheet, youtube_scrape  # noqa: E402
+from decision_maker.scoring import (  # noqa: E402
+    DEFAULT_THRESHOLDS,
+    classify_channel,
+    recommend_niche,
+    score_all,
+)
 
 load_dotenv()  # read TYPESAFE_API_KEY (and any YouTube key later) from .env
 STATIC = Path(__file__).parent / "static"
@@ -81,6 +86,47 @@ def vet():
         rows = [s.to_dict() for s in score_all(ideas, thresholds)]
         engine = "rules"
     return jsonify(rows=rows, errors=errors, fetched=fetched, engine=engine)
+
+
+@app.post("/api/analyze-sheet")
+def analyze_sheet():
+    upload = request.files.get("sheet")
+    if upload is None:
+        return jsonify(error="No sheet uploaded"), 400
+    try:
+        channels = sheet.read_channels(upload.read(), upload.filename or "sheet.xlsx")
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(error=f"Could not read sheet: {exc}"), 400
+    if not channels:
+        return jsonify(error="No channel rows found. Need a header row with Channel Name + stats."), 400
+
+    errors = []
+    if _jev is not None:
+        rows = []
+        for rec in channels:
+            try:
+                rows.append(jev.decide_channel(_jev, rec))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{rec.get('channel', '?')}: Jev error: {exc}")
+        engine = "jev"
+    else:
+        rows = [classify_channel(rec) for rec in channels]
+        engine = "rules"
+
+    rank = {"High": 0, "Medium": 1, "Low": 2}
+    rows.sort(key=lambda r: (rank.get(r["relevance"], 9), -r["avg_views"]))
+    return jsonify(rows=rows, recommendation=recommend_niche(rows), engine=engine, errors=errors)
+
+
+@app.post("/api/export-xlsx")
+def export_xlsx():
+    body = request.get_json(force=True)
+    data = sheet.write_xlsx(body.get("rows", []), body.get("recommendation", {}))
+    return Response(
+        data,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=decisions.xlsx"},
+    )
 
 
 def main() -> None:
