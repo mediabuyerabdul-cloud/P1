@@ -185,3 +185,26 @@ def classify_into(client, instructions, categories, items, context=""):
         ch = resp.choices["cat"]
         out.append({"item": it, "category": ch.choice, "confidence": round(float(ch.confidence), 3)})
     return out
+
+
+# --- Phase 1 feature verdicts via Jev ---------------------------------------
+
+_ENTER_CHOICES = {
+    "enter": "Strong, proven, monetizable - start a channel here",
+    "risky": "Possible but thin or crowded - only with a clear edge",
+    "skip": "Weak demand/proof or oversaturated - do not enter",
+}
+_VLABEL = {"enter": "ENTER", "risky": "RISKY", "skip": "SKIP"}
+
+
+def niche_verdict(client, summary: dict, instructions: str) -> dict:
+    """summary = the computed signals (counts/averages). Returns verdict + confidence."""
+    from typesafe_sdk import Choice
+
+    resp = client.system_one(
+        state=summary,
+        questions={"verdict": Choice(instructions=instructions, criteria=_ENTER_CHOICES)},
+    )
+    ch = resp.choices["verdict"]
+    return {"verdict": _VLABEL.get(ch.choice, ch.choice.upper()),
+            "confidence": round(float(ch.confidence), 3)}

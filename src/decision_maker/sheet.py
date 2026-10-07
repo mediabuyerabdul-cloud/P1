@@ -1,8 +1,9 @@
-"""Read a research sheet (.xlsx/.csv) of competitor channels and write decisions back.
+"""Read research sheets (.xlsx/.csv) you provide, and write decisions back.
 
-You provide the data (stats, demographics, monetization — whatever you've
-collected). This maps your columns to known fields; unknown columns are ignored
-for scoring but you keep them in your own sheet.
+You collect the data (stats, demographics, views); these readers map your
+columns to known fields. Two shapes are supported:
+  - a competitor table (F1 Niche Validator)
+  - a "new channels in the last 60 days" table (F2 Demand vs Saturation)
 """
 
 from __future__ import annotations
@@ -13,8 +14,8 @@ import re
 
 import openpyxl
 
-# header (lowercased) -> canonical field name
-ALIASES = {
+# --- F1: competitor table ---------------------------------------------------
+CHANNEL_ALIASES = {
     "channel name": "channel", "channel": "channel",
     "subscribes": "subscribers", "subscribers": "subscribers", "subs": "subscribers",
     "avg. views per video": "avg_views", "avg views per video": "avg_views", "avg views": "avg_views",
@@ -29,8 +30,19 @@ ALIASES = {
     "top geographies": "geo", "top gender": "gender", "top age": "age",
     "channel creation country": "country", "categories": "category", "category": "category",
 }
-NUMERIC = {"subscribers", "avg_views", "monthly_views", "monthly_income", "rpm",
-           "total_views", "total_videos", "uploads_per_month"}
+CHANNEL_NUMERIC = {"subscribers", "avg_views", "monthly_views", "monthly_income", "rpm",
+                   "total_views", "total_videos", "uploads_per_month"}
+
+# --- F2: new-channels-in-60-days table --------------------------------------
+NEW_ALIASES = {
+    "past 60 days new channels created": "url", "channel": "url", "url": "url",
+    "channel url": "url", "channel link": "url",
+    "avg views in this channel in latest section": "avg_views", "avg views": "avg_views",
+    "avg. views": "avg_views", "average views": "avg_views",
+    "most popular view in this channel": "most_popular", "most popular view": "most_popular",
+    "most popular": "most_popular", "top video views": "most_popular",
+}
+NEW_NUMERIC = {"avg_views", "most_popular"}
 
 
 def _num(v):
@@ -43,33 +55,26 @@ def _num(v):
         return None
 
 
-def _canon(header):
-    return ALIASES.get(str(header or "").strip().lower())
-
-
 def _table_from_bytes(data: bytes, filename: str):
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8-sig", errors="replace")
         return [list(r) for r in csv.reader(io.StringIO(text))]
     wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
-    ws = wb.worksheets[0]  # first sheet = the master table (your "Cap")
-    return [list(r) for r in ws.iter_rows(values_only=True)]
+    return [list(r) for r in wb.worksheets[0].iter_rows(values_only=True)]
 
 
-def read_channels(data: bytes, filename: str) -> list[dict]:
-    table = _table_from_bytes(data, filename)
+def _parse(table, aliases, numeric, required):
     header_idx, colmap = None, {}
     for i, row in enumerate(table[:12]):
-        mapped = [_canon(c) for c in row]
-        if sum(1 for m in mapped if m) >= 3:
-            header_idx = i
+        mapped = [aliases.get(str(c or "").strip().lower()) for c in row]
+        if sum(1 for m in mapped if m) >= 2 and any(m == required for m in mapped):
             for j, m in enumerate(mapped):
                 if m and m not in colmap:
                     colmap[m] = j
+            header_idx = i
             break
     if header_idx is None:
         return []
-
     records = []
     for row in table[header_idx + 1:]:
         if not any(c not in (None, "") for c in row):
@@ -77,14 +82,21 @@ def read_channels(data: bytes, filename: str) -> list[dict]:
         rec = {}
         for field, j in colmap.items():
             val = row[j] if j < len(row) else None
-            rec[field] = _num(val) if field in NUMERIC else ("" if val is None else str(val).strip())
-        if rec.get("channel"):
+            rec[field] = _num(val) if field in numeric else ("" if val is None else str(val).strip())
+        if rec.get(required):
             records.append(rec)
     return records
 
 
+def read_channels(data: bytes, filename: str) -> list[dict]:
+    return _parse(_table_from_bytes(data, filename), CHANNEL_ALIASES, CHANNEL_NUMERIC, "channel")
+
+
+def read_new_channels(data: bytes, filename: str) -> list[dict]:
+    return _parse(_table_from_bytes(data, filename), NEW_ALIASES, NEW_NUMERIC, "url")
+
+
 def write_xlsx(rows: list[dict], recommendation: dict) -> bytes:
-    """rows = decided channels; recommendation = niche verdict. Returns .xlsx bytes."""
     wb = openpyxl.Workbook()
     dec = wb.active
     dec.title = "Decisions"
@@ -93,15 +105,11 @@ def write_xlsx(rows: list[dict], recommendation: dict) -> bytes:
     dec.append([c.replace("_", " ").title() for c in cols])
     for r in rows:
         dec.append([r.get(c, "") for c in cols])
-
     summ = wb.create_sheet("Best Decision")
-    summ.append(["Niche verdict", recommendation.get("verdict", "")])
-    summ.append(["Why", recommendation.get("reason", "")])
-    summ.append([])
-    summ.append(["Follow these channels (template to copy):"])
-    for name in recommendation.get("follow", []):
-        summ.append(["", name])
-
+    summ.append(["Verdict", recommendation.get("verdict", "")])
+    summ.append(["Why", recommendation.get("headline", recommendation.get("reason", ""))])
+    for label, value in recommendation.get("analysis", []):
+        summ.append([label, value])
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

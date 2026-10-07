@@ -6,411 +6,180 @@
 <title>Decision Maker By A</title>
 <style>
   :root { --bg:#0f1420; --card:#171d2b; --ink:#e7ecf3; --muted:#93a0b4; --line:#273142;
-          --accent:#5b8cff; --go:#1fa971; --rework:#d79a1e; --nogo:#d4544a; }
+          --accent:#5b8cff; --enter:#1fa971; --risky:#d79a1e; --skip:#d4544a; }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) { --bg:#f5f7fa; --card:#fff; --ink:#1a2130; --muted:#5b6678;
-      --line:#e3e8ef; --accent:#2a5bd7; --go:#12805c; --rework:#b4810f; --nogo:#c0362c; }
+      --line:#e3e8ef; --accent:#2a5bd7; --enter:#12805c; --risky:#b4810f; --skip:#c0362c; }
   }
   * { box-sizing:border-box; }
   body { margin:0; font:14px/1.5 system-ui,Segoe UI,sans-serif; background:var(--bg); color:var(--ink); }
   main { max-width:1080px; margin:0 auto; padding:24px 16px 56px; }
   h1 { font-size:22px; margin:0 0 2px; }
-  .sub { color:var(--muted); margin:0 0 18px; }
-  .engine { display:inline-block; font-size:12px; padding:3px 10px; border-radius:99px; border:1px solid var(--line); margin-bottom:18px; }
+  .sub { color:var(--muted); margin:0 0 16px; }
+  .engine { display:inline-block; font-size:12px; padding:3px 10px; border-radius:99px; border:1px solid var(--line); margin-bottom:16px; }
   .engine b { color:var(--accent); }
   .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
   label { display:block; font-weight:600; margin-bottom:6px; }
-  textarea, input, select { width:100%; background:var(--bg); color:var(--ink); border:1px solid var(--line);
+  input, select, textarea { width:100%; background:var(--bg); color:var(--ink); border:1px solid var(--line);
     border-radius:8px; padding:9px; font:inherit; }
-  textarea { min-height:120px; resize:vertical; }
-  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
-  .row > div { flex:1 1 180px; }
-  .modes { display:flex; gap:8px; margin-bottom:12px; }
-  .modes button { flex:1; }
+  textarea { min-height:90px; resize:vertical; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > div { flex:1 1 220px; }
   button { font:inherit; font-weight:600; padding:9px 16px; border-radius:8px; border:1px solid var(--accent);
     background:var(--accent); color:#fff; cursor:pointer; }
   button.ghost { background:transparent; color:var(--accent); }
-  button.ghost.active { background:var(--accent); color:#fff; }
   button:disabled { opacity:.5; cursor:not-allowed; }
   .hint { color:var(--muted); font-size:12.5px; margin-top:6px; }
-  details summary { cursor:pointer; color:var(--muted); font-size:13px; }
-  .thresholds { display:flex; gap:12px; margin-top:10px; flex-wrap:wrap; }
-  .thresholds > div { flex:1 1 120px; }
+  .error { color:var(--skip); margin:8px 0; white-space:pre-wrap; }
+  .verdict { font-size:26px; font-weight:800; }
+  .ENTER { color:var(--enter); } .RISKY { color:var(--risky); } .SKIP { color:var(--skip); }
+  .grid { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; }
+  .stat { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 12px; min-width:140px; }
+  .stat .k { color:var(--muted); font-size:12px; } .stat .v { font-size:16px; font-weight:700; }
   table { width:100%; border-collapse:collapse; margin-top:6px; font-size:13px; }
-  th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th, td { padding:8px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
   th { color:var(--muted); font-weight:600; }
-  .verdict { font-weight:700; white-space:nowrap; }
-  .Go { color:var(--go); } .Rework { color:var(--rework); } .No-Go { color:var(--nogo); }
-  .pill { display:inline-block; min-width:54px; text-align:center; padding:3px 8px; border-radius:6px; font-size:12px; font-weight:700; }
-  .pill.Go { background:color-mix(in srgb,var(--go) 18%,transparent); }
-  .pill.Rework { background:color-mix(in srgb,var(--rework) 18%,transparent); }
-  .pill.No-Go { background:color-mix(in srgb,var(--nogo) 18%,transparent); }
-  .num { text-align:right; font-variant-numeric:tabular-nums; }
-  .error { color:var(--nogo); margin:8px 0; white-space:pre-wrap; }
-  .bar { display:flex; gap:16px; color:var(--muted); font-size:13px; margin:10px 0; flex-wrap:wrap; }
-  .bar b { color:var(--ink); }
+  .pill { display:inline-block; padding:3px 8px; border-radius:6px; font-size:12px; font-weight:700; }
+  .pill.High,.pill.ENTER { background:color-mix(in srgb,var(--enter) 18%,transparent); color:var(--enter); }
+  .pill.Medium,.pill.RISKY { background:color-mix(in srgb,var(--risky) 18%,transparent); color:var(--risky); }
+  .pill.Low,.pill.SKIP { background:color-mix(in srgb,var(--skip) 18%,transparent); color:var(--skip); }
 </style>
 </head>
 <body>
 <main>
   <h1>Decision Maker By A</h1>
-  <p class="sub">Phase 1 — Niche &amp; Topic Vetting. Enter ideas, get a Go / Rework / No-Go for each.</p>
-  <div class="engine" id="engine">Deciding with: …</div>
+  <p class="sub">Pick a phase and a feature, upload your data, and get a decision.</p>
+  <div class="engine" id="engine">…</div>
 
   <div class="panel">
-    <label>Jev API key — needed for Phases 2–9 (Phase 1 sheet works without it)</label>
+    <label>Jev API key — Jev makes the decisions (rule engine runs without it)</label>
     <div class="row">
-      <div style="flex:1 1 320px"><input id="jevKey" type="password" placeholder="paste your TYPESAFE_API_KEY here…"></div>
+      <div style="flex:1 1 320px"><input id="jevKey" type="password" placeholder="paste your TYPESAFE_API_KEY…"></div>
       <div style="flex:0 0 auto"><button onclick="saveKey()">Save &amp; connect</button></div>
     </div>
     <div class="hint" id="keyStatus"></div>
   </div>
 
   <div class="panel">
-    <label>Upload your research sheet (.xlsx or .csv) — you provide the data, Jev decides</label>
-    <input type="file" id="sheet" accept=".xlsx,.csv">
-    <div class="hint">Needs a header row with <b>Channel Name</b> + stats (subscribers, avg views, monetization, RPM, income, geography/gender/age…). Jev reads the stats and returns Relevance, Competitor Stage, Tier, and the best overall decision.</div>
-    <div style="margin-top:12px">
-      <button id="analyze" onclick="analyzeSheet()">Make decision</button>
-      <button class="ghost" id="dlxlsx" onclick="downloadXlsx()" disabled>Download .xlsx</button>
+    <div class="row">
+      <div><label>Phase</label><select id="phase" onchange="onPhase()"></select></div>
+      <div><label>Feature</label><select id="feature" onchange="onFeature()"></select></div>
     </div>
-    <div class="error" id="sheetError"></div>
-  </div>
+    <p class="hint" id="about" style="margin-top:10px"></p>
 
-  <div class="panel" id="recPanel" style="display:none">
-    <div id="recBanner"></div>
-  </div>
-
-  <div class="panel" id="sheetResults" style="display:none">
-    <div class="bar" id="sheetSummary"></div>
-    <div style="overflow:auto">
-      <table>
-        <thead><tr>
-          <th>Relevance</th><th>Channel</th><th>Stage</th><th>Tier</th>
-          <th class="num">Avg views</th><th class="num">Subs</th>
-          <th class="num" id="sConfHead">Conf.</th><th>Why</th>
-        </tr></thead>
-        <tbody id="sheetRows"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="panel">
-    <label>Decision tasks — Phases 2–9 (you provide the options, Jev decides)</label>
-    <div class="row" style="margin:8px 0 10px">
-      <div style="flex:1 1 260px">
-        <select id="phase" onchange="onPhase()"></select>
+    <div id="featureBody" style="display:none">
+      <label style="margin-top:8px">Upload your data (.xlsx or .csv)</label>
+      <input type="file" id="file" accept=".xlsx,.csv">
+      <div class="hint" id="inputHint"></div>
+      <details style="margin-top:8px"><summary class="hint">…or paste CSV instead</summary>
+        <textarea id="paste" placeholder="Paste rows (with a header line) here"></textarea>
+      </details>
+      <div style="margin-top:12px">
+        <button id="run" onclick="runFeature()">Make decision</button>
+        <button class="ghost" id="dl" onclick="downloadXlsx()" disabled>Download .xlsx</button>
       </div>
     </div>
-    <div id="ctxWrap" style="margin-bottom:10px">
-      <input id="ctx" placeholder="context">
-    </div>
-    <textarea id="taskItems" placeholder="One option per line…"></textarea>
-    <div class="hint" id="taskHint"></div>
-    <div style="margin-top:12px"><button id="runTask" onclick="runTask()">Decide</button></div>
-    <div class="error" id="taskError"></div>
-    <div id="taskResult" style="margin-top:12px"></div>
-    <div class="hint" id="pending" style="margin-top:14px"></div>
+    <div class="error" id="err"></div>
   </div>
 
-  <details class="panel"><summary>Or: quick topic check (no sheet)</summary>
-  <div style="margin-top:14px">
-    <div class="modes">
-      <button class="ghost active" id="mode-auto" onclick="setMode('auto')">Auto — browse YouTube</button>
-      <button class="ghost" id="mode-manual" onclick="setMode('manual')">Manual — type the numbers</button>
-    </div>
-
-    <div class="row" style="margin-bottom:12px">
-      <div style="flex:0 0 220px">
-        <label>Niche</label>
-        <select id="niche">
-          <option>AI images</option>
-          <option>AI animations</option>
-          <option>Compilations</option>
-          <option>Other</option>
-        </select>
-      </div>
-    </div>
-
-    <label id="ideasLabel">Video ideas — one per line</label>
-    <textarea id="ideas" placeholder="Robot welding factory tour&#10;AI cat compilation&#10;Deep sea creatures explained"></textarea>
-    <div class="hint" id="ideasHint">Auto mode reads each topic's top YouTube results (views + how recent) and lets Jev decide.</div>
-
-    <details style="margin-top:12px">
-      <summary>Advanced: scoring thresholds (used only by the built-in fallback)</summary>
-      <div class="thresholds">
-        <div><label>Min demand</label><input id="t_min" type="number"></div>
-        <div><label>Go at</label><input id="t_go" type="number"></div>
-        <div><label>Rework at</label><input id="t_rework" type="number"></div>
-      </div>
-    </details>
-
-    <div style="margin-top:14px">
-      <button id="run" onclick="run()">Vet ideas</button>
-      <button class="ghost" onclick="exportCsv()" id="csv" disabled>Export CSV</button>
-    </div>
-    <div class="error" id="error"></div>
-  </div>
-  </details>
-
-  <div class="panel" id="resultsPanel" style="display:none">
-    <div class="bar" id="summary"></div>
-    <div style="overflow:auto">
-      <table>
-        <thead><tr>
-          <th>Verdict</th><th>Topic</th><th>Niche</th>
-          <th class="num">Avg views</th><th class="num">Competitors</th>
-          <th class="num" id="confHead">Confidence</th><th>Why</th>
-        </tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-  </div>
+  <div class="panel" id="result" style="display:none"></div>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let mode = "auto";
-let lastRows = [];
+let DATA = null, lastResult = null;
 
-async function init() {
-  try {
-    const d = await (await fetch("/api/defaults")).json();
-    $("t_min").value = d.thresholds.min_demand;
-    $("t_go").value = d.thresholds.go;
-    $("t_rework").value = d.thresholds.rework;
-    showEngine(d.engine);
-  } catch (e) { showEngine("rules"); }
+function esc(s){ const d=document.createElement("div"); d.textContent=s==null?"":String(s); return d.innerHTML; }
+
+function showEngine(engine){
+  $("engine").innerHTML = engine==="jev"
+    ? 'Deciding with: <b>Jev</b> (typesafe.ai) ✓' : 'Deciding with: <b>built-in rules</b> — paste your Jev key for Jev decisions';
+  $("keyStatus").innerHTML = engine==="jev"
+    ? '<span style="color:var(--enter)">✓ Jev connected.</span>' : 'Not connected. Paste your key (console.typesafe.ai) and Save.';
 }
 
-function showEngine(engine) {
-  $("engine").innerHTML = engine === "jev"
-    ? 'Deciding with: <b>Jev</b> (typesafe.ai) ✓'
-    : 'Deciding with: <b>built-in rules</b> — paste your Jev key below for Jev-powered decisions';
-  $("confHead").style.display = engine === "jev" ? "" : "none";
-  $("keyStatus").innerHTML = engine === "jev"
-    ? '<span style="color:var(--go)">✓ Jev connected.</span>'
-    : 'Not connected. Paste your key (from console.typesafe.ai) and Save.';
+async function saveKey(){
+  const key=$("jevKey").value.trim();
+  if(!key){ $("keyStatus").textContent="Paste your Jev key first."; return; }
+  $("keyStatus").textContent="Connecting…";
+  try{
+    const res=await fetch("/api/set-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key})});
+    const d=await res.json(); if(!res.ok) throw new Error(d.error||("HTTP "+res.status));
+    $("jevKey").value=""; showEngine(d.engine);
+  }catch(e){ $("keyStatus").textContent=e.message; }
 }
 
-async function saveKey() {
-  const key = $("jevKey").value.trim();
-  if (!key) { $("keyStatus").textContent = "Paste your Jev key first."; return; }
-  $("keyStatus").textContent = "Connecting…";
-  try {
-    const res = await fetch("/api/set-key", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key }),
-    });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || ("HTTP " + res.status));
-    $("jevKey").value = "";
-    showEngine(d.engine);
-  } catch (e) { $("keyStatus").textContent = e.message; }
+async function init(){
+  const d=await (await fetch("/api/features")).json();
+  DATA=d.phases; showEngine(d.engine);
+  $("phase").innerHTML=DATA.map(p=>`<option value="${p.id}">${esc(p.title)}</option>`).join("");
+  onPhase();
 }
 
-function setMode(m) {
-  mode = m;
-  $("mode-auto").classList.toggle("active", m === "auto");
-  $("mode-manual").classList.toggle("active", m === "manual");
-  $("ideasHint").textContent = m === "auto"
-    ? "Auto mode reads each topic's top YouTube results (views + how recent), then Jev decides."
-    : "Manual mode: one per line as  topic | competing videos | avg views   (e.g.  AI cat compilation | 6 | 120000 ).";
-  $("ideasLabel").textContent = m === "auto" ? "Video ideas — one per line" : "Ideas — topic | competing videos | avg views";
+function currentPhase(){ return DATA.find(p=>p.id===$("phase").value); }
+function currentFeature(){ const p=currentPhase(); return p&&p.features.find(f=>f.id===$("feature").value); }
+
+function onPhase(){
+  const p=currentPhase();
+  $("feature").innerHTML = p.features.length
+    ? p.features.map(f=>`<option value="${f.id}">${esc(f.title)}</option>`).join("")
+    : `<option value="">(no features yet)</option>`;
+  onFeature();
 }
 
-function parseRows() {
-  return $("ideas").value.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
-    if (mode === "manual") {
-      const [topic, comp, views] = line.split("|").map(s => (s || "").trim());
-      return { topic, competing_videos: Number(comp) || 0, avg_views: Number(views) || 0 };
-    }
-    return { topic: line };
-  });
+function onFeature(){
+  const f=currentFeature();
+  if(!f){ $("about").textContent="Share this phase's spec (like the Phase 1 PDF) and I'll build its features."; $("featureBody").style.display="none"; return; }
+  $("about").textContent=f.about;
+  $("inputHint").textContent=f.input_hint;
+  $("featureBody").style.display="";
+  $("result").style.display="none"; $("err").textContent=""; $("dl").disabled=true;
 }
 
-async function run() {
-  $("error").textContent = "";
-  const rows = parseRows();
-  if (!rows.length) { $("error").textContent = "Add at least one idea."; return; }
-  $("run").disabled = true;
-  $("run").textContent = mode === "auto" ? "Browsing YouTube…" : "Scoring…";
-  try {
-    const res = await fetch("/api/vet", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode, rows, niche: $("niche").value,
-        thresholds: { min_demand: +$("t_min").value, go: +$("t_go").value, rework: +$("t_rework").value },
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-    showEngine(data.engine);
-    render(data.rows, data.errors);
-  } catch (e) {
-    $("error").textContent = e.message;
+async function runFeature(){
+  $("err").textContent="";
+  const f=currentFeature(); if(!f) return;
+  const fd=new FormData();
+  fd.append("phase",$("phase").value); fd.append("feature",$("feature").value);
+  if($("file").files[0]) fd.append("file",$("file").files[0]);
+  fd.append("paste",$("paste").value);
+  $("run").disabled=true; $("run").textContent="Deciding…";
+  try{
+    const res=await fetch("/api/run-feature",{method:"POST",body:fd});
+    const d=await res.json(); if(!res.ok) throw new Error(d.error||("HTTP "+res.status));
+    lastResult=d; render(d);
+  }catch(e){ $("err").textContent=e.message; }
+  $("run").disabled=false; $("run").textContent="Make decision";
+}
+
+function render(d){
+  const conf = d.confidence!=null ? ` <span style="color:var(--muted);font-size:14px">(${Math.round(d.confidence*100)}% conf)</span>` : "";
+  let html = `<div class="verdict ${d.verdict}">${esc(d.verdict)}${conf}</div>`;
+  html += `<p style="margin:6px 0 2px">${esc(d.headline)}</p>`;
+  html += `<div class="grid">` + (d.analysis||[]).map(([k,v])=>`<div class="stat"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("") + `</div>`;
+  const cols=d.columns||[]; const rows=d.rows||[];
+  if(rows.length){
+    html += `<table><thead><tr>`+cols.map(c=>`<th>${esc(c.replace(/_/g," "))}</th>`).join("")+`</tr></thead><tbody>`;
+    html += rows.map(r=>`<tr>`+cols.map(c=>{
+      let v=r[c];
+      if(c==="relevance"||c==="stage") return `<td><span class="pill ${c==="relevance"?esc(v):""}">${esc(v)}</span></td>`;
+      if(typeof v==="number") v=v.toLocaleString();
+      return `<td>${esc(v)}</td>`;
+    }).join("")+`</tr>`).join("");
+    html += `</tbody></table>`;
   }
-  $("run").disabled = false;
-  $("run").textContent = "Vet ideas";
+  $("result").innerHTML=html; $("result").style.display="";
+  $("dl").disabled = !(rows.length);
 }
 
-function render(rows, errors) {
-  lastRows = rows;
-  $("resultsPanel").style.display = "";
-  const n = (v) => (v == null ? "" : Number(v).toLocaleString());
-  const counts = { Go: 0, Rework: 0, "No-Go": 0 };
-  rows.forEach(r => counts[r.verdict]++);
-  $("summary").innerHTML =
-    `<span>Total: <b>${rows.length}</b></span>` +
-    `<span style="color:var(--go)">Go: <b>${counts.Go}</b></span>` +
-    `<span style="color:var(--rework)">Rework: <b>${counts.Rework}</b></span>` +
-    `<span style="color:var(--nogo)">No-Go: <b>${counts["No-Go"]}</b></span>`;
-  $("rows").innerHTML = rows.map(r => `
-    <tr>
-      <td><span class="pill ${r.verdict}">${r.verdict}</span></td>
-      <td>${esc(r.topic)}</td>
-      <td>${esc(r.niche || "")}</td>
-      <td class="num">${n(r.avg_views)}</td>
-      <td class="num">${n(r.competing_videos)}</td>
-      <td class="num">${r.confidence != null ? Math.round(r.confidence * 100) + "%" : ""}</td>
-      <td>${esc(r.reason || "")}</td>
-    </tr>`).join("");
-  $("confHead").style.display = rows.some(r => r.confidence != null) ? "" : "none";
-  $("csv").disabled = !rows.length;
-  if (errors && errors.length) $("error").textContent = errors.join("\n");
+async function downloadXlsx(){
+  if(!lastResult) return;
+  const res=await fetch("/api/export-xlsx",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({rows:lastResult.rows, recommendation:lastResult})});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(await res.blob()); a.download="decisions.xlsx"; a.click();
 }
 
-function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
-
-function exportCsv() {
-  const head = ["Verdict", "Topic", "Niche", "Avg views", "Competitors", "Confidence", "Why"];
-  const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const lines = [head, ...lastRows.map(r => [r.verdict, r.topic, r.niche, r.avg_views, r.competing_videos,
-    r.confidence != null ? Math.round(r.confidence * 100) + "%" : "", r.reason])]
-    .map(c => c.map(cell).join(","));
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv" }));
-  a.download = "decision_maker_results.csv";
-  a.click();
-}
-
-let sheetData = null;
-
-async function analyzeSheet() {
-  $("sheetError").textContent = "";
-  const file = $("sheet").files[0];
-  if (!file) { $("sheetError").textContent = "Choose a .xlsx or .csv first."; return; }
-  $("analyze").disabled = true; $("analyze").textContent = "Deciding…";
-  try {
-    const body = new FormData(); body.append("sheet", file);
-    const res = await fetch("/api/analyze-sheet", { method: "POST", body });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-    sheetData = data;
-    showEngine(data.engine);
-    renderSheet(data);
-  } catch (e) { $("sheetError").textContent = e.message; }
-  $("analyze").disabled = false; $("analyze").textContent = "Make decision";
-}
-
-function renderSheet(data) {
-  const rows = data.rows, rec = data.recommendation;
-  $("recPanel").style.display = ""; $("sheetResults").style.display = "";
-  const vClass = { Go: "Go", Rework: "Rework", "No-Go": "No-Go" }[rec.verdict] || "";
-  $("recBanner").innerHTML =
-    `<h2 style="margin:0 0 6px">Best decision: <span class="${vClass}">${rec.verdict}</span></h2>` +
-    `<p style="margin:0 0 8px">${esc(rec.reason)}</p>` +
-    (rec.follow && rec.follow.length
-      ? `<p style="margin:0;color:var(--muted)">Follow / model these: <b>${rec.follow.map(esc).join(", ")}</b></p>` : "");
-  const c = { High: 0, Medium: 0, Low: 0 };
-  rows.forEach(r => c[r.relevance]++);
-  $("sheetSummary").innerHTML =
-    `<span>Channels: <b>${rows.length}</b></span><span>High: <b>${c.High}</b></span>` +
-    `<span>Medium: <b>${c.Medium}</b></span><span>Low: <b>${c.Low}</b></span>`;
-  const n = (v) => (v === "" || v == null ? "" : Number(v).toLocaleString());
-  const rc = { High: "Go", Medium: "Rework", Low: "No-Go" };
-  $("sheetRows").innerHTML = rows.map(r => `
-    <tr>
-      <td><span class="pill ${rc[r.relevance]}">${r.relevance}</span></td>
-      <td>${esc(r.channel)}</td><td>${esc(r.stage)}</td><td>${esc(r.tier || "")}</td>
-      <td class="num">${n(r.avg_views)}</td><td class="num">${n(r.subscribers)}</td>
-      <td class="num">${r.confidence != null ? Math.round(r.confidence * 100) + "%" : ""}</td>
-      <td>${esc(r.reason || "")}</td>
-    </tr>`).join("");
-  $("sConfHead").style.display = rows.some(r => r.confidence != null) ? "" : "none";
-  $("dlxlsx").disabled = false;
-}
-
-async function downloadXlsx() {
-  if (!sheetData) return;
-  const res = await fetch("/api/export-xlsx", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rows: sheetData.rows, recommendation: sheetData.recommendation }),
-  });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(await res.blob());
-  a.download = "decisions.xlsx"; a.click();
-}
-
-let PHASES = [];
-
-async function loadPhases() {
-  try {
-    const d = await (await fetch("/api/phases")).json();
-    PHASES = d.phases;
-    $("phase").innerHTML = PHASES.map(p => `<option value="${p.id}">${esc(p.title)}</option>`).join("");
-    $("pending").innerHTML = "Coming with an LLM/vision key: " +
-      d.pending.map(p => esc(p.title)).join(" · ");
-    onPhase();
-  } catch (e) { /* ignore */ }
-}
-
-function onPhase() {
-  const p = PHASES.find(x => x.id === $("phase").value);
-  if (!p) return;
-  $("taskHint").textContent = p.hint;
-  $("ctx").placeholder = p.context_label;
-  $("ctxWrap").style.display = p.context_label ? "" : "none";
-}
-
-async function runTask() {
-  $("taskError").textContent = ""; $("taskResult").innerHTML = "";
-  $("runTask").disabled = true; $("runTask").textContent = "Deciding…";
-  try {
-    const res = await fetch("/api/task", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: $("phase").value, context: $("ctx").value, items: $("taskItems").value }),
-    });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || ("HTTP " + res.status));
-    if (d.note) { $("taskResult").innerHTML = `<p style="color:var(--muted)">${esc(d.note)}</p>`; return; }
-    if (d.error) { $("taskError").textContent = d.error; return; }
-    renderTask(d);
-  } catch (e) { $("taskError").textContent = e.message; }
-  $("runTask").disabled = false; $("runTask").textContent = "Decide";
-}
-
-function renderTask(d) {
-  let html = "";
-  if (d.best) html += `<p><b>Best:</b> <span class="Go">${esc(d.best)}</span>` +
-    (d.confidence != null ? ` <span style="color:var(--muted)">(${Math.round(d.confidence * 100)}% conf)</span>` : "") + "</p>";
-  const rows = d.rows || [];
-  const cols = d.op === "score" ? ["item", "label", "score", "confidence"]
-    : d.op === "classify" ? ["item", "category", "confidence"]
-    : ["item", "pick"];
-  html += "<table><thead><tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>" +
-    rows.map(r => "<tr>" + cols.map(c => {
-      let v = r[c];
-      if (c === "pick") v = v ? "★ best" : "";
-      if (c === "confidence" && v != null) v = Math.round(v * 100) + "%";
-      return `<td>${esc(v == null ? "" : String(v))}</td>`;
-    }).join("") + "</tr>").join("") + "</tbody></table>";
-  $("taskResult").innerHTML = html;
-}
-
-setMode("auto");
 init();
-loadPhases();
 </script>
 </body>
 </html>

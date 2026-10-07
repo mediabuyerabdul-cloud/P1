@@ -127,3 +127,83 @@ def recommend_niche(decisions: list[dict]) -> dict:
         verdict = "No-Go"
         reason = "No highly-relevant, proven channels — weak niche signal."
     return {"verdict": verdict, "reason": reason, "follow": follow}
+
+
+# --- Phase 1 features: deep-analysis verdicts (rule fallback) ---------------
+
+def _mean(xs):
+    xs = [x for x in xs if x]
+    return sum(xs) / len(xs) if xs else 0
+
+
+def validate_niche(channels: list[dict]) -> dict:
+    """F1 - Niche Validator: ENTER / RISKY / SKIP from the competitor table."""
+    decs = [classify_channel(c) for c in channels]
+    n = len(decs)
+    highs = [d for d in decs if d["relevance"] == "High"]
+    monetized = [d for d in decs if d["monetized"]]
+    leaders = [d for d in decs if d["stage"] == "Market Leader"]
+    avg_demand = int(_mean([d["avg_views"] for d in decs]))
+    good_rpm = [c for c in channels if (c.get("rpm") or 0) >= 2]
+
+    if len(highs) >= 3 and len(monetized) >= 2:
+        verdict = "ENTER"
+        headline = (f"Proven, monetizable niche: {len(highs)} highly-relevant channels, "
+                    f"{len(monetized)} monetized, {len(leaders)} market leader(s).")
+    elif highs and (monetized or leaders):
+        verdict = "RISKY"
+        headline = (f"Some proof ({len(highs)} high-relevance, {len(monetized)} monetized) but thin - "
+                    "enter only with a sharper angle than the leaders.")
+    else:
+        verdict = "SKIP"
+        headline = "Weak signal: too few relevant, monetized, or leading channels to justify entry."
+
+    analysis = [
+        ("Channels analyzed", n),
+        ("Highly relevant", len(highs)),
+        ("Monetized", len(monetized)),
+        ("Market leaders", len(leaders)),
+        ("Channels with RPM >= 2", len(good_rpm)),
+        ("Avg views across niche", f"{avg_demand:,}"),
+    ]
+    rank = {"High": 0, "Medium": 1, "Low": 2}
+    decs.sort(key=lambda d: (rank[d["relevance"]], -d["avg_views"]))
+    return {"verdict": verdict, "headline": headline, "analysis": analysis, "rows": decs,
+            "columns": ["channel", "relevance", "stage", "tier", "avg_views", "subscribers", "reason"]}
+
+
+def demand_vs_saturation(rows: list[dict]) -> dict:
+    """F2 - Demand vs Saturation: from new channels (last 60 days)."""
+    n = len(rows)
+    avgs = [r.get("avg_views") or 0 for r in rows]
+    pops = [r.get("most_popular") or 0 for r in rows]
+    avg_demand = int(_mean(avgs))
+    max_pop = int(max(pops) if pops else 0)
+    breakout = sum(1 for p in pops if p >= 100000)
+    pulling = sum(1 for a in avgs if a >= 10000)
+
+    demand = "High" if (avg_demand >= 10000 or max_pop >= 100000) else "Moderate" if avg_demand >= 3000 else "Low"
+    saturation = "High" if n >= 8 else "Moderate" if n >= 4 else "Low"
+
+    if demand in ("High", "Moderate") and saturation != "High":
+        verdict = "ENTER"
+        headline = f"{demand} demand (avg {avg_demand:,} views, breakout {max_pop:,}) with {saturation.lower()} saturation - room to compete."
+    elif demand == "High" and saturation == "High":
+        verdict = "RISKY"
+        headline = f"Demand is proven but {n} new channels already crowd it - enter only with a clear edge."
+    else:
+        verdict = "SKIP"
+        headline = f"{demand} demand and {saturation.lower()} saturation - not worth a new channel now."
+
+    analysis = [
+        ("New channels (60 days)", n),
+        ("Demand", demand),
+        ("Saturation", saturation),
+        ("Avg views (new channels)", f"{avg_demand:,}"),
+        ("Biggest breakout view", f"{max_pop:,}"),
+        ("Channels pulling >=10k avg", pulling),
+        ("Channels with a 100k+ video", breakout),
+    ]
+    rows_sorted = sorted(rows, key=lambda r: -(r.get("most_popular") or 0))
+    return {"verdict": verdict, "headline": headline, "analysis": analysis, "rows": rows_sorted,
+            "columns": ["url", "avg_views", "most_popular"]}
