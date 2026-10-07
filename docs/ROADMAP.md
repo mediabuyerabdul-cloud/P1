@@ -36,7 +36,9 @@ Later: mp4 (Phase 7 video analysis), images (Phase 4 glitch check), mp3 (Phase 8
 ## Status
 - [x] Phase 1 built: Go/No-Go via Jev (rule fallback), YouTube browser reader, localhost UI, CSV export.
 - [ ] Validate YouTube reader live on a real machine (blocked in cloud dev).
-- [ ] Phase 2 onward.
+- [x] Phases 2-9 built as Jev decision presets (score / pick / classify) in one generic engine.
+- [ ] Generative sub-features (Phase 3 prompts, Phase 4 description/tags, Phase 4 glitch, Phase 7 video) need an LLM/vision/ffmpeg key.
+- [ ] Validate all phases live once a Jev key is added.
 
 ## Run
 `start-decision-maker.bat` → opens http://127.0.0.1:5001

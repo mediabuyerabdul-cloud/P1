@@ -86,6 +86,24 @@
     </div>
   </div>
 
+  <div class="panel">
+    <label>Decision tasks — Phases 2–9 (you provide the options, Jev decides)</label>
+    <div class="row" style="margin:8px 0 10px">
+      <div style="flex:1 1 260px">
+        <select id="phase" onchange="onPhase()"></select>
+      </div>
+    </div>
+    <div id="ctxWrap" style="margin-bottom:10px">
+      <input id="ctx" placeholder="context">
+    </div>
+    <textarea id="taskItems" placeholder="One option per line…"></textarea>
+    <div class="hint" id="taskHint"></div>
+    <div style="margin-top:12px"><button id="runTask" onclick="runTask()">Decide</button></div>
+    <div class="error" id="taskError"></div>
+    <div id="taskResult" style="margin-top:12px"></div>
+    <div class="hint" id="pending" style="margin-top:14px"></div>
+  </div>
+
   <details class="panel"><summary>Or: quick topic check (no sheet)</summary>
   <div style="margin-top:14px">
     <div class="modes">
@@ -306,8 +324,65 @@ async function downloadXlsx() {
   a.download = "decisions.xlsx"; a.click();
 }
 
+let PHASES = [];
+
+async function loadPhases() {
+  try {
+    const d = await (await fetch("/api/phases")).json();
+    PHASES = d.phases;
+    $("phase").innerHTML = PHASES.map(p => `<option value="${p.id}">${esc(p.title)}</option>`).join("");
+    $("pending").innerHTML = "Coming with an LLM/vision key: " +
+      d.pending.map(p => esc(p.title)).join(" · ");
+    onPhase();
+  } catch (e) { /* ignore */ }
+}
+
+function onPhase() {
+  const p = PHASES.find(x => x.id === $("phase").value);
+  if (!p) return;
+  $("taskHint").textContent = p.hint;
+  $("ctx").placeholder = p.context_label;
+  $("ctxWrap").style.display = p.context_label ? "" : "none";
+}
+
+async function runTask() {
+  $("taskError").textContent = ""; $("taskResult").innerHTML = "";
+  $("runTask").disabled = true; $("runTask").textContent = "Deciding…";
+  try {
+    const res = await fetch("/api/task", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase: $("phase").value, context: $("ctx").value, items: $("taskItems").value }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || ("HTTP " + res.status));
+    if (d.note) { $("taskResult").innerHTML = `<p style="color:var(--muted)">${esc(d.note)}</p>`; return; }
+    if (d.error) { $("taskError").textContent = d.error; return; }
+    renderTask(d);
+  } catch (e) { $("taskError").textContent = e.message; }
+  $("runTask").disabled = false; $("runTask").textContent = "Decide";
+}
+
+function renderTask(d) {
+  let html = "";
+  if (d.best) html += `<p><b>Best:</b> <span class="Go">${esc(d.best)}</span>` +
+    (d.confidence != null ? ` <span style="color:var(--muted)">(${Math.round(d.confidence * 100)}% conf)</span>` : "") + "</p>";
+  const rows = d.rows || [];
+  const cols = d.op === "score" ? ["item", "label", "score", "confidence"]
+    : d.op === "classify" ? ["item", "category", "confidence"]
+    : ["item", "pick"];
+  html += "<table><thead><tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>" +
+    rows.map(r => "<tr>" + cols.map(c => {
+      let v = r[c];
+      if (c === "pick") v = v ? "★ best" : "";
+      if (c === "confidence" && v != null) v = Math.round(v * 100) + "%";
+      return `<td>${esc(v == null ? "" : String(v))}</td>`;
+    }).join("") + "</tr>").join("") + "</tbody></table>";
+  $("taskResult").innerHTML = html;
+}
+
 setMode("auto");
 init();
+loadPhases();
 </script>
 </body>
 </html>

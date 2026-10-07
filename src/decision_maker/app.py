@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request, send_from_directory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from decision_maker import jev, sheet, youtube_scrape  # noqa: E402
+from decision_maker import jev, phases, sheet, youtube_scrape  # noqa: E402
 from decision_maker.scoring import (  # noqa: E402
     DEFAULT_THRESHOLDS,
     classify_channel,
@@ -127,6 +127,22 @@ def export_xlsx():
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=decisions.xlsx"},
     )
+
+
+@app.get("/api/phases")
+def list_phases():
+    return jsonify(phases=phases.LIST, pending=phases.PENDING_LIST,
+                   engine="jev" if _jev is not None else "rules")
+
+
+@app.post("/api/task")
+def task():
+    body = request.get_json(force=True)
+    items = [x.strip() for x in str(body.get("items", "")).split("\n") if x.strip()]
+    try:
+        return jsonify(phases.run_task(body.get("phase"), items, body.get("context", ""), _jev))
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(error=str(exc)), 400
 
 
 def main() -> None:

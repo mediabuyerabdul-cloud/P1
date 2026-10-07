@@ -135,3 +135,53 @@ def decide_channel(client, rec: dict) -> dict:
                      and "not" not in str(rec.get("monetization", "")).lower(),
         "reason": f"Jev: {relevance} relevance, {stage} ({resp.choices['relevance'].confidence:.0%} conf).",
     }
+
+
+# --- Generic decision ops reused by every phase -----------------------------
+
+def score_each(client, instructions, levels, items, context=""):
+    from typesafe_sdk import Score
+    out = []
+    for it in items:
+        resp = client.system_one(
+            state={"item": it, "context": context},
+            questions={"score": Score(instructions=instructions, criteria=levels)},
+        )
+        s = resp.scores["score"].score
+        out.append({
+            "item": it,
+            "score": round(float(s), 2),
+            "label": levels[min(max(round(s) - 1, 0), len(levels) - 1)],
+            "confidence": round(float(getattr(resp.scores["score"], "confidence", 0)), 3),
+        })
+    out.sort(key=lambda r: -r["score"])
+    return out
+
+
+def pick_best(client, instructions, options, context=""):
+    from typesafe_sdk import Choice
+    criteria = {f"opt{i}": opt for i, opt in enumerate(options)}
+    resp = client.system_one(
+        state={"context": context, "options": options},
+        questions={"best": Choice(instructions=instructions, criteria=criteria)},
+    )
+    ch = resp.choices["best"]
+    idx = int(ch.choice[3:]) if ch.choice.startswith("opt") else 0
+    probs = getattr(ch, "probabilities", {}) or {}
+    idx_of = {opt: i for i, opt in enumerate(options)}
+    ranked = sorted(options, key=lambda o: -probs.get(f"opt{idx_of[o]}", 0))
+    return {"best": options[idx], "confidence": round(float(ch.confidence), 3), "ranked": ranked}
+
+
+def classify_into(client, instructions, categories, items, context=""):
+    from typesafe_sdk import Choice
+    criteria = {c: c for c in categories}
+    out = []
+    for it in items:
+        resp = client.system_one(
+            state={"item": it, "context": context},
+            questions={"cat": Choice(instructions=instructions, criteria=criteria)},
+        )
+        ch = resp.choices["cat"]
+        out.append({"item": it, "category": ch.choice, "confidence": round(float(ch.confidence), 3)})
+    return out

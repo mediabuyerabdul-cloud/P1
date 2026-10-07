@@ -132,3 +132,45 @@ def test_write_xlsx_roundtrips():
                               "rpm": 2.66, "monetization": "Monetized"})]
     data = sheet.write_xlsx(rows, recommend_niche(rows))
     assert data[:2] == b"PK"  # a valid .xlsx (zip) was produced
+
+
+# --- Generic phase engine (fake Jev client, no network) ---
+from decision_maker import phases
+
+
+class _FakeScoreClient:
+    def system_one(self, state, questions):
+        return SimpleNamespace(scores={"score": SimpleNamespace(score=4.0, confidence=0.7)}, choices={})
+
+
+class _FakePickClient:
+    def system_one(self, state, questions):
+        return SimpleNamespace(choices={"best": SimpleNamespace(
+            choice="opt1", confidence=0.66, probabilities={"opt0": 0.2, "opt1": 0.8})}, scores={})
+
+
+class _FakeClassifyClient:
+    def system_one(self, state, questions):
+        return SimpleNamespace(choices={"cat": SimpleNamespace(choice="A", confidence=0.9)}, scores={})
+
+
+def test_phase_score_ranks_items():
+    out = phases.run_task("p4_title", ["title one", "title two"], "farm", _FakeScoreClient())
+    assert out["engine"] == "jev" and out["op"] == "score"
+    assert out["rows"][0]["label"] == "strong"
+
+
+def test_phase_pick_returns_best():
+    out = phases.run_task("p8_hook", ["hook a", "hook b"], "", _FakePickClient())
+    assert out["best"] == "hook b" and out["rows"][0]["item"] == "hook b"
+
+
+def test_phase_classify_needs_categories():
+    assert "error" in phases.run_task("p2_template", ["Chan X"], "", _FakeClassifyClient())
+    out = phases.run_task("p2_template", ["Chan X"], "A, B, C", _FakeClassifyClient())
+    assert out["rows"][0]["category"] == "A"
+
+
+def test_phase_without_client_is_honest():
+    out = phases.run_task("p4_title", ["t"], "", None)
+    assert out["engine"] == "needs-jev" and "Jev key" in out["note"]
